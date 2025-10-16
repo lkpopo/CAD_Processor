@@ -1,0 +1,35 @@
+# Build folders
+[Bb]uild/
+[Bb]in/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+
+# Logs and temp
+*.log
+*.tlog
+*.pdb
+*.obj
+*.idb
+*.ipch
+
+# Others
+*.exe
+*.dll
+*.lib
+*.pyc
+*.zip
+*.tar.gz
