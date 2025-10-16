@@ -16,15 +16,37 @@ std::vector<Vertex> generateExtrudedMesh(const std::vector<Vertex>& bottomVerts,
 {
     std::vector<Vertex> vertices;
     size_t n = bottomVerts.size();
-    if (n < 3)
-        return vertices; // 至少 3 个顶点才能成面
+    if (n < 3) return vertices;
 
     // 1️⃣ 顶面顶点
     std::vector<Vertex> topVerts;
     for (auto& b : bottomVerts)
-        topVerts.push_back({ b.x, b.y, b.z + height });
+        topVerts.push_back({b.x, b.y, b.z + height});
 
-    // 2️⃣ 生成侧面三角形
+    // 2️⃣ 使用 earcut 三角化底面
+    using Point = std::pair<float, float>;
+    std::vector<std::vector<Point>> polygon;
+    std::vector<Point> outer;
+    for (auto& v : bottomVerts) outer.push_back({v.x, v.y});
+    polygon.push_back(outer); // 单外环
+
+    std::vector<uint32_t> indices = mapbox::earcut<uint32_t>(polygon);
+
+    // 3️⃣ 底面三角形
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        vertices.push_back(bottomVerts[indices[i]]);
+        vertices.push_back(bottomVerts[indices[i+1]]);
+        vertices.push_back(bottomVerts[indices[i+2]]);
+    }
+
+    // 4️⃣ 顶面三角形（法线朝外，顶面需要逆序）
+    for (size_t i = 0; i < indices.size(); i += 3) {
+        vertices.push_back(topVerts[indices[i]]);
+        vertices.push_back(topVerts[indices[i+2]]);
+        vertices.push_back(topVerts[indices[i+1]]);
+    }
+
+    // 5️⃣ 侧面三角形
     for (size_t i = 0; i < n; ++i) {
         size_t next = (i + 1) % n;
         Vertex b0 = bottomVerts[i];
@@ -41,33 +63,6 @@ std::vector<Vertex> generateExtrudedMesh(const std::vector<Vertex>& bottomVerts,
         vertices.push_back(b0);
         vertices.push_back(t1);
         vertices.push_back(b1);
-    }
-
-    // 3️⃣ 生成底面和顶面三角形（triangle fan）
-    Vertex centerB { 0.0f, 0.0f, 0.0f }, centerT { 0.0f, 0.0f, height };
-    for (auto& v : bottomVerts) {
-        centerB.x += v.x;
-        centerB.y += v.y;
-        centerB.z += v.z;
-    }
-    centerB.x /= n;
-    centerB.y /= n;
-    centerB.z /= n;
-    centerT.x = centerB.x;
-    centerT.y = centerB.y;
-    centerT.z = centerB.z + height;
-
-    for (size_t i = 0; i < n; ++i) {
-        size_t next = (i + 1) % n;
-        // 底面
-        vertices.push_back(bottomVerts[i]);
-        vertices.push_back(bottomVerts[next]);
-        vertices.push_back(centerB);
-
-        // 顶面
-        vertices.push_back(topVerts[i]);
-        vertices.push_back(centerT);
-        vertices.push_back(topVerts[next]);
     }
 
     return vertices;

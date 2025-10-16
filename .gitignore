@@ -12,6 +12,7 @@ x86/
 *.user
 *.VC.db
 *.VC.opendb
+.vscode
 
 # CMake
 CMakeFiles/

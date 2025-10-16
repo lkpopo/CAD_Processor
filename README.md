@@ -2,3 +2,5 @@
 
 **其核心就是根据二维多边形生成三维的三角面点数据。**
 
+- 所使用读取cad文件的c++库是[这个](https://github.com/LibreCAD/libdxfrw)
+- cmake中用到的opengl库和相关头文件需要根据实际情况替换路径

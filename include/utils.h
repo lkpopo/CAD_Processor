@@ -4,6 +4,7 @@
 #include <iostream>
 #include <vector>
 #include <fstream>
+#include "earcut.hpp"
 
 struct Vertex {
     float x, y, z;
