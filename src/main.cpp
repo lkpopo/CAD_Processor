@@ -24,8 +24,8 @@ void processInput(GLFWwindow* window)
 
 int main(int argc, char** argv)
 {
-    std::string filename = "sample.dxf";
-    MyDXFReader reader(100.0, "F:/workspace/CAD_Processor/obj_res");
+    std::string filename = "../data/sample.dxf";
+    MyDXFReader reader(100.0, "../obj_res");
     dxfRW dxf(filename.c_str()); // 创建 DXF 读取对象
 
     std::cout << "Reading file: " << filename << std::endl;
@@ -76,7 +76,7 @@ int main(int argc, char** argv)
 
     glEnable(GL_DEPTH_TEST);
 
-    Shader shader("vertex_shader.glsl", "fragment_shader.glsl");
+    Shader shader("../shaders/vertex_shader.glsl", "../shaders/fragment_shader.glsl");
 
     // ------------------ 创建 VAO/VBO ------------------
     std::vector<GLuint> vaos, vbos;
@@ -114,7 +114,6 @@ int main(int argc, char** argv)
         for (size_t i = 0; i < reader.shapes.size(); ++i) {
             const auto& shape = reader.shapes[i];
             glBindVertexArray(vaos[i]);
-
             // 画底面
             glDrawArrays(GL_TRIANGLES, 0, shape.vertices.size());
 

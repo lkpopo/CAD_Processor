@@ -5,7 +5,6 @@
 #include <vector>
 #include <fstream>
 
-// ------------------ 顶点结构体 ------------------
 struct Vertex {
     float x, y, z;
     Vertex(float _x, float _y, float _z)
@@ -22,7 +21,7 @@ enum class ShapeType {
 
 struct Shape {
     ShapeType type;
-    std::vector<Vertex> vertices; // 拉伸后的顶点
+    std::vector<Vertex> vertices; 
     Shape(ShapeType t, const std::vector<Vertex>& verts)
         : type(t)
         , vertices(verts)
