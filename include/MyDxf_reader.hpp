@@ -7,10 +7,18 @@
 
 class MyDXFReader : public DRW_Interface {
 public:
-    float _height; // 拉伸高度
+    float defaultHeight = 10.0f; // 拉伸高度
     int poly_count,circle_count;
     std::string _obj_save_path;
-    std::vector<Shape> shapes; // 存储所有拉伸后的形状
+    std::vector<RawPoly> polys;
+
+    MyDXFReader(float height,std::string path)
+        : defaultHeight(height)
+        , _obj_save_path(path)
+        , poly_count(0)
+        , circle_count(0)
+    {
+    }
 
     void addCircle(const DRW_Circle& data) override
     {
@@ -18,34 +26,86 @@ public:
                   << data.basePoint.x << ", " << data.basePoint.y
                   << "), radius=" << data.radious << "\n";
 
-        auto pts = makeCircle(data.basePoint.x, data.basePoint.y, data.radious, 64);
-        Shape s(ShapeType::Circle, generateExtrudedMesh(pts, _height));
-        exportToOBJ(_obj_save_path + "/circle_" + std::to_string(circle_count++) + ".obj", s.vertices);
-        shapes.push_back(std::move(s));
+        const int segments = 64;
+        RawPoly p; p.area = 0;
+        for (int i=0;i<segments;i++){
+            double theta = 2.0*M_PI*i/segments;
+            Vertex V{ (float)(data.basePoint.x + cos(theta)*data.radious),
+                      (float)(data.basePoint.y + sin(theta)*data.radious),
+                      0.0f};
+            p.pts.push_back(V);
+        }
+        p.area = polygonSignedArea(p.pts);
+        polys.push_back(std::move(p));
     }
 
     void addLWPolyline(const DRW_LWPolyline& data) override
     {
+        if (data.vertlist.empty()) return;
         std::cout << "LWPolyline: " << data.vertlist.size() << " vertices\n";
-        std::vector<Vertex> points;
+        
+        RawPoly p; p.area = 0;
         for (const auto& v : data.vertlist) {
             std::cout << "   (" << v->x << ", " << v->y << ")\n";
-            
-            points.push_back({ static_cast<float>(v->x), static_cast<float>(v->y), 0.0 });
+            Vertex V({ (float)v->x, (float)v->y, 0.0f });
+            p.pts.push_back(V);
         }
-        Shape s(ShapeType::Polyline, generateExtrudedMesh(points, _height));
-        exportToOBJ(_obj_save_path + "/polyline_" + std::to_string(poly_count++) + ".obj", s.vertices);
-        shapes.push_back(std::move(s));
-    }
+        p.area = polygonSignedArea(p.pts);
+        // if poly closed? sometimes last equals first, remove duplicate last if present
+        if (p.pts.size()>1) {
+            if (std::fabs(p.pts.front().x - p.pts.back().x) < 1e-6f &&
+                std::fabs(p.pts.front().y - p.pts.back().y) < 1e-6f) {
+                p.pts.pop_back();
+            }
+        }
+        polys.push_back(std::move(p));
 
-    MyDXFReader(float height,std::string path)
-        : _height(height)
-        , _obj_save_path(path)
-        , poly_count(0)
-        , circle_count(0)
-    {
     }
+    
+    std::vector<std::pair<RawPoly, std::vector<RawPoly>>> groupOuterWithHoles() {
+        size_t m = polys.size();
+        std::vector<int> parent(m, -1); // 父级多边形索引（即它所属的外环）
+        // 计算多边形的面积，因为计算方法的限制，面积可能为负数（取决于顶点顺序），所以取绝对值
+        std::vector<double> absArea(m);
+        for (size_t i=0;i<m;i++) absArea[i] = std::abs(polys[i].area);
 
+        // 对每个多边形 j，取它的第一个顶点作为测试点
+        // 寻找包含该点的面积最小多边形 i，作为它的父级
+        for (size_t j=0;j<m;j++){
+            // pick a test point from polys[j], e.g. first vertex
+            if (polys[j].pts.empty()) continue;
+            double tx = polys[j].pts[0].x;
+            double ty = polys[j].pts[0].y;
+            int best = -1; double bestArea = 1e300;
+            for (size_t i=0;i<m;i++){
+                if (i==j) continue; // 不跟自己比较
+                if (absArea[i] <= absArea[j]) continue; // 外环面积必须更大
+                if (pointInPoly(polys[i].pts, tx, ty)) {
+                    if (absArea[i] < bestArea) { bestArea = absArea[i]; best = (int)i; }
+                }
+            }
+            parent[j] = best; // -1 means no parent -> it's an outer candidate
+        }
+
+        // 创建一个新的 group（pair），外环放在 first，空洞初始化为空 second
+        std::vector<std::pair<RawPoly, std::vector<RawPoly>>> groups;
+        std::vector<int> outerIndexMap(m, -1);
+        for (size_t i=0;i<m;i++){
+            if (parent[i] == -1) { // outer
+                outerIndexMap[i] = (int)groups.size();
+                groups.push_back({polys[i], {}});
+            }
+        }
+        // assign holes
+        for (size_t j=0;j<m;j++){
+            if (parent[j] != -1) {
+                int p = parent[j];
+                int idx = outerIndexMap[p];
+                if (idx >= 0) groups[idx].second.push_back(polys[j]);
+            }
+        }
+        return groups;
+    }
 
 
 

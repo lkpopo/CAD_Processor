@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include "utils.h"
 
 // ------------------ 键盘交互 ------------------
 float rotY = 0.0f;
@@ -34,31 +35,54 @@ int main(int argc, char** argv)
         std::cerr << "Failed to read file.\n";
         return 1;
     }
+    std::cout<<"Parsed polygons: "<<reader.polys.size()<<"\n";
 
-     // ------------------ 归一化 DXF 顶点 ------------------
-    float x_min = 1e4, x_max = -1e4;
-    float y_min = 1e4, y_max = -1e4;
-    float z_min = 1e4, z_max = -1e4;
+    auto groups = reader.groupOuterWithHoles();
+    std::cout<<"Groups (outer with holes): "<<groups.size()<<"\n";
 
-    for (auto& shape : reader.shapes)
-        for (auto& v : shape.vertices) {
-            x_min = std::min(x_min, v.x);
-            x_max = std::max(x_max, v.x);
-            y_min = std::min(y_min, v.y);
-            y_max = std::max(y_max, v.y);
-            z_min = std::min(z_min, v.z);
-            z_max = std::max(z_max, v.z);
+     // For each group, build polygonRings (outer then holes), extrude and triangulate (earcut)
+    const float height = reader.defaultHeight;
+    std::vector<Vertex> allTris; // all triangles for export / rendering
+    size_t groupIdx = 0;
+    for (auto &g : groups) {
+        std::vector<std::vector<Vertex>> rings;
+        // outer ring: ensure proper winding: earcut accepts either, but typical is outer CCW, holes CW (earcut can handle)
+        rings.push_back(g.first.pts);
+        for (auto &hole : g.second) rings.push_back(hole.pts);
+
+        // 利用earcut生成三角网格
+        auto tris = triangulateRingsToTris(rings, height, 0.0f);
+        appendVerts(allTris, tris);
+        // sides: for each ring generate side tris
+        for (auto &ring : rings) {
+            auto side = generateSideTriangles(ring, height);
+            appendVerts(allTris, side);
+            appendVerts(tris, side);
         }
 
-    float scale = 2.0f / std::max({ x_max - x_min, y_max - y_min, z_max - z_min });
-    glm::vec3 center((x_max + x_min) / 2, (y_max + y_min) / 2, (z_max + z_min) / 2);
+        // 导出OBJ
+         exportGroupToOBJ(tris, groupIdx++);
+    }
 
-    for (auto& shape : reader.shapes)
-        for (auto& v : shape.vertices) {
-            v.x = (v.x - center.x) * scale;
-            v.y = (v.y - center.y) * scale;
-            v.z = (v.z - center.z) * scale;
-        }
+    if (allTris.empty()) {
+        std::cerr<<"No triangles generated, nothing to render.\n";
+        return -1;
+    }
+
+    // normalize coords to [-1,1]
+    float xmin=1e9, xmax=-1e9, ymin=1e9, ymax=-1e9, zmin=1e9, zmax=-1e9;
+    for (auto &v: allTris) {
+        xmin = std::min(xmin, v.x); xmax = std::max(xmax, v.x);
+        ymin = std::min(ymin, v.y); ymax = std::max(ymax, v.y);
+        zmin = std::min(zmin, v.z); zmax = std::max(zmax, v.z);
+    }
+    float scale = 2.0f / std::max({xmax - xmin, ymax - ymin, zmax - zmin, 1e-6f});
+    glm::vec3 center{ (xmax+xmin)/2.0f, (ymax+ymin)/2.0f, (zmax+zmin)/2.0f };
+    for (auto &v: allTris) {
+        v.x = (v.x - center.x) * scale;
+        v.y = (v.y - center.y) * scale;
+        v.z = (v.z - center.z) * scale;
+    }
 
     std::cout << "DXF parsing finished.\n";
 
@@ -77,25 +101,15 @@ int main(int argc, char** argv)
     glEnable(GL_DEPTH_TEST);
 
     Shader shader("../shaders/vertex_shader.glsl", "../shaders/fragment_shader.glsl");
-
-    // ------------------ 创建 VAO/VBO ------------------
-    std::vector<GLuint> vaos, vbos;
-    for (auto& shape : reader.shapes) {
-        GLuint vao, vbo;
-        glGenVertexArrays(1, &vao);
-        glGenBuffers(1, &vbo);
-
-        glBindVertexArray(vao);
-        glBindBuffer(GL_ARRAY_BUFFER, vbo);
-        glBufferData(GL_ARRAY_BUFFER, shape.vertices.size() * sizeof(Vertex),
-            shape.vertices.data(), GL_STATIC_DRAW);
-
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-        glEnableVertexAttribArray(0);
-
-        vaos.push_back(vao);
-        vbos.push_back(vbo);
-    }
+        
+    GLuint vao, vbo;
+    glGenVertexArrays(1, &vao);
+    glGenBuffers(1, &vbo);
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, allTris.size()*sizeof(Vertex), allTris.data(), GL_STATIC_DRAW);
+    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(Vertex),(void*)0);
 
      // ------------------ 渲染循环 ------------------
     while (!glfwWindowShouldClose(window)) {
@@ -111,13 +125,9 @@ int main(int argc, char** argv)
         shader.setMat4("model", model);
         shader.setMat4("view", view);
         shader.setMat4("projection", projection);
-        for (size_t i = 0; i < reader.shapes.size(); ++i) {
-            const auto& shape = reader.shapes[i];
-            glBindVertexArray(vaos[i]);
-            // 画底面
-            glDrawArrays(GL_TRIANGLES, 0, shape.vertices.size());
-
-        }
+        
+        glBindVertexArray(vao);
+        glDrawArrays(GL_TRIANGLES, 0, (GLsizei)allTris.size());
 
         glfwSwapBuffers(window);
         glfwPollEvents();
