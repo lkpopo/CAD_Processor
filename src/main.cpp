@@ -15,7 +15,7 @@
 
 // ------------------ 键盘交互 ------------------
 float rotY = 0.0f;
-void processInput(GLFWwindow* window)
+void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
         rotY -= 0.02f;
@@ -23,7 +23,7 @@ void processInput(GLFWwindow* window)
         rotY += 0.02f;
 }
 
-int main(int argc, char** argv)
+int main(int argc, char **argv)
 {
     std::string filename = "../data/sample.dxf";
     MyDXFReader reader(100.0, "../obj_res");
@@ -31,54 +31,64 @@ int main(int argc, char** argv)
 
     std::cout << "Reading file: " << filename << std::endl;
 
-    if (!dxf.read(&reader, false)) { // false 表示不保留块引用
+    if (!dxf.read(&reader, false))
+    { // false 表示不保留块引用
         std::cerr << "Failed to read file.\n";
         return 1;
     }
-    std::cout<<"Parsed polygons: "<<reader.polys.size()<<"\n";
+    std::cout << "Parsed polygons: " << reader.polys.size() << "\n";
 
     auto groups = reader.groupOuterWithHoles();
-    std::cout<<"Groups (outer with holes): "<<groups.size()<<"\n";
+    std::cout << "Groups (outer with holes): " << groups.size() << "\n";
 
-     // For each group, build polygonRings (outer then holes), extrude and triangulate (earcut)
+    // For each group, build polygonRings (outer then holes), extrude and triangulate (earcut)
     const float height = reader.defaultHeight;
     std::vector<Vertex> allTris; // all triangles for export / rendering
     size_t groupIdx = 0;
-    for (auto &g : groups) {
+    for (auto &g : groups)
+    {
         std::vector<std::vector<Vertex>> rings;
         // outer ring: ensure proper winding: earcut accepts either, but typical is outer CCW, holes CW (earcut can handle)
         rings.push_back(g.first.pts);
-        for (auto &hole : g.second) rings.push_back(hole.pts);
+        for (auto &hole : g.second)
+            rings.push_back(hole.pts);
 
         // 利用earcut生成三角网格
         auto tris = triangulateRingsToTris(rings, height, 0.0f);
         appendVerts(allTris, tris);
         // sides: for each ring generate side tris
-        for (auto &ring : rings) {
+        for (auto &ring : rings)
+        {
             auto side = generateSideTriangles(ring, height);
             appendVerts(allTris, side);
             appendVerts(tris, side);
         }
 
         // 导出OBJ
-         exportGroupToOBJ(tris, groupIdx++);
+        exportGroupToOBJ(tris, groupIdx++);
     }
 
-    if (allTris.empty()) {
-        std::cerr<<"No triangles generated, nothing to render.\n";
+    if (allTris.empty())
+    {
+        std::cerr << "No triangles generated, nothing to render.\n";
         return -1;
     }
 
     // normalize coords to [-1,1]
-    float xmin=1e9, xmax=-1e9, ymin=1e9, ymax=-1e9, zmin=1e9, zmax=-1e9;
-    for (auto &v: allTris) {
-        xmin = std::min(xmin, v.x); xmax = std::max(xmax, v.x);
-        ymin = std::min(ymin, v.y); ymax = std::max(ymax, v.y);
-        zmin = std::min(zmin, v.z); zmax = std::max(zmax, v.z);
+    float xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9, zmin = 1e9, zmax = -1e9;
+    for (auto &v : allTris)
+    {
+        xmin = std::min(xmin, v.x);
+        xmax = std::max(xmax, v.x);
+        ymin = std::min(ymin, v.y);
+        ymax = std::max(ymax, v.y);
+        zmin = std::min(zmin, v.z);
+        zmax = std::max(zmax, v.z);
     }
     float scale = 2.0f / std::max({xmax - xmin, ymax - ymin, zmax - zmin, 1e-6f});
-    glm::vec3 center{ (xmax+xmin)/2.0f, (ymax+ymin)/2.0f, (zmax+zmin)/2.0f };
-    for (auto &v: allTris) {
+    glm::vec3 center{(xmax + xmin) / 2.0f, (ymax + ymin) / 2.0f, (zmax + zmin) / 2.0f};
+    for (auto &v : allTris)
+    {
         v.x = (v.x - center.x) * scale;
         v.y = (v.y - center.y) * scale;
         v.z = (v.z - center.z) * scale;
@@ -91,9 +101,10 @@ int main(int argc, char** argv)
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "DXF Extrude Viewer", nullptr, nullptr);
+    GLFWwindow *window = glfwCreateWindow(800, 600, "DXF Extrude Viewer", nullptr, nullptr);
     glfwMakeContextCurrent(window);
-    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) {
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
         std::cerr << "Failed to initialize GLAD\n";
         return -1;
     }
@@ -101,18 +112,19 @@ int main(int argc, char** argv)
     glEnable(GL_DEPTH_TEST);
 
     Shader shader("../shaders/vertex_shader.glsl", "../shaders/fragment_shader.glsl");
-        
+
     GLuint vao, vbo;
     glGenVertexArrays(1, &vao);
     glGenBuffers(1, &vbo);
     glBindVertexArray(vao);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, allTris.size()*sizeof(Vertex), allTris.data(), GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, allTris.size() * sizeof(Vertex), allTris.data(), GL_STATIC_DRAW);
     glEnableVertexAttribArray(0);
-    glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,sizeof(Vertex),(void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void *)0);
 
-     // ------------------ 渲染循环 ------------------
-    while (!glfwWindowShouldClose(window)) {
+    // ------------------ 渲染循环 ------------------
+    while (!glfwWindowShouldClose(window))
+    {
         processInput(window);
         glClearColor(0.1, 0.1, 0.1, 1.0);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -125,7 +137,7 @@ int main(int argc, char** argv)
         shader.setMat4("model", model);
         shader.setMat4("view", view);
         shader.setMat4("projection", projection);
-        
+
         glBindVertexArray(vao);
         glDrawArrays(GL_TRIANGLES, 0, (GLsizei)allTris.size());
 
@@ -135,5 +147,4 @@ int main(int argc, char** argv)
 
     glfwTerminate();
     return 0;
-    
 }
