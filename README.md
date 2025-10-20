@@ -1,6 +1,24 @@
 仓库主要的功能是将CAD的二维平面文件(dwg,dxf)中的数据读取出来，并将其提升至三维平面（类似于高德地图中导航的建筑的效果），并在OpenGL里渲染出效果，同时将每一个元素保存成obj格式的文件。
 
-**其核心就是根据二维多边形生成三维的三角面点数据。**
+`data`目录下存放需要转换的dxf文件。如有其它需要请自行修改main.cpp中的dxf路径。
 
-- 所使用读取cad文件的c++库是[这个](https://github.com/LibreCAD/libdxfrw)
-- cmake中用到的opengl库和相关头文件需要根据实际情况替换路径
+
+
+- linux直接用master分支即可，可以直接编译使用
+- windows使用msvc分支，需要自己修改cmake里面的库路径，缺啥补啥。
+
+
+
+
+
+***\*其核心就是根据二维多边形生成三维的三角面点数据。\****
+
+
+
+\- 所使用读取cad文件的c++库是[这个](https://github.com/LibreCAD/libdxfrw)
+
+\- cmake中用到的opengl库和相关头文件需要根据实际情况替换路径
+
+
+
+![动画](data/动画.gif)
