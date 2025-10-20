@@ -3,13 +3,6 @@
 
 // ------------------ 键盘交互 ------------------
 float rotY = 0.0f;
-void processInput(GLFWwindow *window)
-{
-    if (glfwGetKey(window, GLFW_KEY_LEFT) == GLFW_PRESS)
-        rotY -= 0.02f;
-    if (glfwGetKey(window, GLFW_KEY_RIGHT) == GLFW_PRESS)
-        rotY += 0.02f;
-}
 
 int main(int argc, char **argv)
 {
